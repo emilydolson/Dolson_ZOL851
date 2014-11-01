@@ -1,0 +1,597 @@
+---
+title: "Assignment3"
+author: "Emily Dolson"
+date: "11/01/2014"
+output:
+  html_document:
+    keep_md: yes
+  pdf_document:
+    keep_tex: yes
+---
+# 1. A.
+
+```{r power_analysis, include=FALSE}
+# Plotting multiple series of power simulations on a single graph.
+# Power analysis in the linear regression framework
+
+
+
+N=1000  # Number of simulations for inner loop. You generally want this to be >1000
+p = numeric(N) # initializing the vector to store the p values in the inner for loop. 
+
+#Global Parameter values
+a=0.5 # intercept
+b <- seq(from=0.0, to=0.9,by=0.1)
+
+sample_size <- seq(from=10,to=100,by=10)  # Incrememently increasing sample size from 10 to 100 by 10 observations at a time.
+
+power.size <- numeric(length(sample_size)) # initializing the vector to store the power at each sample size for the outer for loop.
+sd.size <- numeric(length(sample_size))
+
+power.b <- matrix(0,length(sample_size),length(b))
+sd.b <- matrix(0,length(sample_size),length(b))
+p_matrix <- array(0,dim=c(length(sample_size), length(b), N), dimnames=c("slope", "sample size", "p"))
+s_matrix <- array(0,dim=c(length(sample_size), length(b), N), dimnames=c("slope", "sample size", "s"))
+b_matrix <- array(0,dim=c(length(sample_size), length(b), N), dimnames=c("slope", "sample size", "b"))
+
+for (k in 1:length(b))
+ {
+  
+  b_b <- b[k]
+  
+   for (j in 1:length(sample_size))
+
+    {
+   
+      s_s = sample_size[j]
+      for (i in 1:N)
+      {
+       x <- rnorm(s_s, mean=8, sd=2)
+       y_det <- a + b_b*x
+       y_sim <- rnorm(s_s, mean=y_det,sd=2)
+       lm1 <- lm(y_sim~x)
+       p[i] <- coef(summary(lm1))[2,4]
+    
+     }
+    
+      power.size[j] <- length(p[p<0.05])/N
+     
+     #So we can make 3d scatterplot of p-values
+      p_matrix[k,j,] <- p
+      s_matrix[k,j,] <- rep(j, N)
+      b_matrix[k,j,] <- rep(k, N)
+   }
+   
+    power.b[,k] <- power.size
+    sd.b[,k] <- sd(power.size)
+}
+
+```
+
+Perspective plot:
+
+```{r perspective_plot, echo=FALSE}
+persp(y=b, x=sample_size, z=power.b, col="blue", theta=-70, shade=0.75, ltheta=45, ylab="slope", xlab="Sample Size", lphi=30, zlim=c(0,1.25), ticktype = "detailed")
+```
+
+Contour plot:
+
+```{r contour_plot, echo=FALSE}
+# contour plot
+contour(z=power.b, x=sample_size, y=b, col="blue",  ylab="slope", xlab="Sample Size")
+```
+
+Fancy contour plot:
+
+```{r fancy_contour_plot, echo=FALSE}
+#fancy contour
+filled.contour(z=power.b, x=sample_size, y=b,  ylab="slope", ylim=c(min(b),max(b)), xlim=c(min(sample_size),max(sample_size)), xlab="Sample Size", color = topo.colors)
+```
+
+Scree plot:
+
+```{r scree_plot, echo=FALSE}
+
+# Scree plots using lattice
+### This requires a little bit of set-up.
+require(lattice)
+
+power.b.t  <- t(power.b)  # Transpose the matrix to make it easier to work with.
+dim(power.b.t)
+
+
+# from a numeric vector of our slopes to factor for the legend (required for xyplot)
+lev.pow <- as.factor(b) 
+
+
+###  We need to write out a long formula for each component of this model for the graphics to grab each row.
+
+# generate the left side of the formula
+variable.matrix <- paste("power.b.t[", 1:nrow(power.b.t), ",]", sep="", collapse=" + ") 
+
+# This would have been the ugly thing we had to write out!
+variable.matrix 
+
+# Now we Generate the whole formula
+formula.1 <- as.formula(paste(variable.matrix, "sample_size", sep="~")) # combines variable.matrix with the right side of the formula.
+
+formula.1
+
+# xyplot is in the lattice library.
+xyplot(formula.1, type="b", ylab="power", key=simpleKey(levels(lev.pow), space="right", title="slope")) 
+
+```
+
+1. I find either the perspective plot or the fancy contour plot to be most useful to me, because both allow me to see at a glance what regions of parameter space have what levels of power. The non-fancy contour plot and scree plot take a little more effort for me to interpret, although the scree plot allows for more exact estimates of power under specific conditions (particularly since it would be possible to add error pars to the scree plot).
+
+2. This is a 3d scatter plot of all of the p values obtained at the different parameter settings. This allows you to get a sense of the shape of the distribution across the parameter space and see the notable drop-off in the spread of p-values as sample size and slope increase.
+
+```{r 3dscatterplot, echo=FALSE}
+require(scatterplot3d)
+s3d <- scatterplot3d(as.vector(s_matrix), as.vector(b_matrix), as.vector(p_matrix), color = rainbow(length(as.vector(p_matrix))), zlab="P-value", xlab="Sample Size", ylab="Slope", angle=-80, xlim=c(0,12))
+```
+
+3. In order to change the amount of un-modeled variation you would just need to increase the standard deviation used in the call to rnorm in the line in the inner for loop where y_sim is populated.
+
+4. To change alpha, the line where the number of p-values for which the null hypothesis is rejected needs to be changed. The line to be changed is: `power.size[j] <- length(p[p<0.05])/N`, and .05 would need to be changed to the new alpha value.
+
+5. The steps to perform a power analysis without p-values would be as follows:
+*1. Simulate y values for the range of sample and effect sizes in which you are interested.
+*2. Within each of these conditions, calculate confidence intervals for the y values.
+*3. Calculate the percentage of confidence intervals in each condition that don't include 0.
+(of course, this isn't really that different than a p-value... maybe you have something more different in mind that I'm not thinking of)
+
+B. 
+
+```{r power_analysis_2, include=FALSE}
+# Plotting multiple series of power simulations on a single graph.
+# Power analysis in the linear regression framework
+# pdf()
+N=1000  # Number of simulations for inner loop. You generally want this to be >1000
+p = numeric(N) # initializing the vector to store the p values in the inner for loop. 
+
+#Global Parameter values
+a=0.5 # intercept
+b <- seq(from=-0.5, to=0.5,by=0.1)
+
+sample_size <- seq(from=10,to=100,by=10)  # Incrememently increasing sample size from 10 to 100 by 10 observations at a time.
+
+power.size <- numeric(length(sample_size)) # initializing the vector to store the power at each sample size for the outer for loop.
+
+power.b <- matrix(0,length(sample_size),length(b)) # generates an empty matrix which will be filled by the "power" values from the simulations
+
+for (k in 1:length(b))
+ {
+  
+  b_b <- b[k]
+  
+   for (j in 1:length(sample_size))
+
+    {
+   
+      s_s = sample_size[j]
+      for (i in 1:N)
+      {
+       x <- rnorm(s_s, mean=8, sd=2)
+       y_det <- a + b_b*x
+       y_sim <- rnorm(s_s, mean=y_det,sd=2)
+       lm1 <- lm(y_sim~x)
+       p[i] <- coef(summary(lm1))[2,4]
+    
+     }
+    
+      power.size[j] <- length(p[p<0.05])/N 
+   }
+   
+    power.b[,k] <- power.size 
+}
+
+```
+
+Perspective plot:
+```{r perspective_plot_2, echo=FALSE}
+persp(y=b, x=sample_size,z=power.b, col="blue", theta=-50, shade=0.8, ltheta=45, ylab="slope", xlab="Sample Size", lphi=30, zlim=c(0,1.25), ticktype = "detailed")
+```
+
+Contour plot:
+```{r contour_plot_2, echo=FALSE}
+# contour plot
+contour(z=power.b, x=sample_size, y=b, col="blue",  ylab="slope", xlab="Sample Size")
+```
+
+Fancy contour plot:
+```{r fancy_contour_plot_2, echo=FALSE}
+#fancy contour
+filled.contour(z=power.b, x=sample_size, y=b,  ylab="slope", ylim=c(min(b),max(b)), xlim=c(min(sample_size),max(sample_size)), xlab="Sample Size", color = topo.colors)
+```
+
+Scree plot:
+```{r scree_lot_2, echo=FALSE}
+###
+power.b.t  <- t(power.b)
+require(lattice)
+
+lev.pow <- as.factor(b) # from numeric slopes to factor for the legend
+
+
+xyplot(power.b.t[1,] + power.b.t[2,] + power.b.t[3,] + power.b.t[4,] + power.b.t[5,] + power.b.t[6,] 
+       + power.b.t[7,] + power.b.t[8,] + power.b.t[9,] + power.b.t[10,]  ~ sample_size, type="b", ylab="power", key=simpleKey(levels(lev.pow),space="right", title="slope"))
+```
+
+This surface looks very different because the effect sizes (slopes) now range from negative 5 to positive 5. As a result, the most extreme effect in this analysis is less extreme than the most extreme in the previous analysis, and there is effectively a power valley between the two most extreme points. This makes sense, as no test will be able to detect an effect of size 0, and effects will get progressively harder to detect as their sizes approach zero. As before, the perspective plot is more useful for getting a general sense of the shape of the relationship between power, sample size, and effect size, but the xyplot is more useful for getting exact values. In general, larger slopes and sample sizes increase power. This makes sense, as larger slopes mean the expected values for the two distributions will be more different, and larger sample sizes reduce the probability that results occured by chance.
+
+C. 
+I just ran an addiitional set of 500 runs for this project in which diversity is able to vary continuously, through the use of random environments, rather than varrying within treatment blocks. This is the subset of my dataset which I will use here. Additionally, I am only using data from the end points of the runs, to avoid the weird temporal auto-correlation discussed in the previous assignment which completely violates the assumptions of a linear model.
+
+The linear model I'll be using is: `ent_div_lm <- lm(ShannonDiversityPhenotype ~ (ent+(EQU>0)+overlap)^2, data=endPoints)`, in which I am attempting to predict phenotypic Shannon diversity based on ent (entropy of the environment), overlap (the average number of resources available per cell), and a boolean indicating whether or not EQU evolved, as this variable can confound the results. The fundamental question is to what extend environmental entropy affects phenotypic diversity. Therefore, the fundamental question is whether or not the contribution of environmental entropy is significantly different from 0. As such, it is appropriate to use the p-value of the coefficient of ent. The power analysis, then, will provide information about the effect sizes I would be able to detect with the sample size that I used (500).
+
+```{r load_data, include=FALSE}
+#Part B
+
+#Samuel Perez, Audra Chaput, and myself collected these data to study the impact of
+#spatial heterogeneity on phenotypic diversity as part of the BEACON class last semester.
+
+#Each row provides statistics about an entire Avida population at a given time point 
+#within a run of Avida. There are 30 replicates per condition and 100 time points per replicate.
+
+#These data were collected as part of an experiment. We were applying spatial heterogeneity
+#conditions to observe the effect.
+
+#Replicate samples were collected by re-running Avida with the same configuration file and
+# a different random seed.
+
+#Start Code
+
+#Read in data
+dirs <- list.dirs(path = "~/repos/resource-heterogeneity/experiment/", recursive=FALSE)
+dirs <- dirs[grep("randomized", dirs)]
+#we're only interested in actual test conditions, which involved changing the distance between patches
+
+#Make sure that files from same replicate get merged appropriately
+data <- NULL #This section adapted from stackoverflow.com answer
+for (d in dirs) {
+  for (d2 in list.dirs(path = d, recursive = FALSE)){
+    
+    phenotype_file_path <- paste(d2, "phenotype_count.dat", sep = "/")
+    task_file_path <- paste(d2, "tasks.dat", sep = "/")
+
+    if (file.exists(phenotype_file_path) & file.exists(task_file_path)){
+    
+      phenotypes <- read.csv(phenotype_file_path, header = F, sep = " ", na.strings = "", colClasses = "character", skip = 8)
+      tasks <- read.csv(task_file_path, header = F, sep = " ", na.strings = "", colClasses = "character", skip = 15)
+      tasks <- cbind(tasks[,1], tasks[,length(tasks)-1])
+
+      dat <- merge(phenotypes, tasks, by = 1)
+      
+      dat$condition <- tail(unlist(strsplit(d, split = "/", fixed = T)), n=1)
+      dat$seed <- tail(unlist(strsplit(tail(unlist(strsplit(d2, split = "/", fixed = T)), n=1), split="_", fixed=T))[3], n=1)
+      data <- rbind(data, dat)
+    }
+  }
+}
+
+ents <- read.csv("~/repos/resource-heterogeneity/ents.csv", header = T, sep = ",")
+data <- merge(data, ents, by = "seed")
+
+#Remove Null columns
+data$V7 <- NULL
+
+#Assign column names
+names(data)[2] <- "Updates"
+names(data)[3] <- "PhenotypeRichness"
+names(data)[4] <- "ShannonDiversityPhenotype"
+names(data)[5] <- "PhenotypeRichnessbyTaskCount"
+names(data)[6] <- "ShannonDiversityPhenotypeTaskCount"
+names(data)[7] <- "AverageTaskDiversity"
+names(data)[8] <- "EQU"
+
+#Include factors as factors
+data$condition<-factor(data$condition)
+
+#Convert numeric type to numeric
+data$seed <- as.numeric(data$seed)
+data$Updates <- as.numeric(data$Updates)
+data$PhenotypeRichness <- as.numeric(data$PhenotypeRichness)
+data$ShannonDiversityPhenotype <- as.numeric(data$ShannonDiversityPhenotype)
+data$PhenotypeRichnessbyTaskCount <- as.numeric(data$PhenotypeRichnessbyTaskCount)
+data$ShannonDiversityPhenotypeTaskCount <- as.numeric(data$ShannonDiversityPhenotypeTaskCount)
+data$AverageTaskDiversity <- as.numeric(data$AverageTaskDiversity)
+data$EQU <- as.numeric(as.character(data$EQU))
+data$ent <- as.numeric(data$ent)
+data$overlap <- as.numeric(data$overlap)
+data$functional_ent <- as.numeric(data$functional_ent)
+data$variance <- as.numeric(data$variance)
+data$kurtosis <- as.numeric(data$kurtosis)
+data$skew <- as.numeric(data$skew)
+
+#Create linear model of 
+endPoints <- subset(data, (data$Updates==100000))
+ent_div_lm <- lm(ShannonDiversityPhenotype ~ ent+(EQU>0)+overlap, data=endPoints)
+```
+
+1. I am interested in the potential range of effect sizes that entropy could have on phenotypic diversity, so I will be varrying the mean of the distribtion from which the coefficient of ent is selected. The greatest reasonable slope would be 1, as this represents a scenario in which every cell in the environment is occupied by either the optimal phenotype or a more rare one, resulting in any increase in environmental entropy correspondingly increasing phenotypic entropy. It is also theoretically possible for environmental entropy to have a negative impact on phenotypic entropy (I even just came across a paper showing that this happens if only one phenotypic trait is allowed), although highly unlikely in this setup. As such, I will examine a series of slopes from -1 to 1. Since I could theoretically collect more data, I will also vary sample size to see if using a greater value than the 500 I am currently using would be useful.
+
+```{r power_anlysis_my_data, include=FALSE}
+# Plotting multiple series of power simulations on a single graph.
+# Power analysis in the linear regression framework
+# pdf()
+N=100  # Number of simulations for inner loop. You generally want this to be >1000
+p = numeric(N) # initializing the vector to store the p values in the inner for loop. 
+
+#Global Parameter values
+a=coef(ent_div_lm)[1] # intercept
+b <- seq(from=-1, to=1,by=0.1)
+
+sample_size <- seq(from=500,to=1000,by=100)  # Incrememently increasing sample size from 10 to 100 by 10 observations at a time.
+
+power.size <- numeric(length(sample_size)) # initializing the vector to store the power at each sample size for the outer for loop.
+
+power.b <- matrix(0,length(sample_size),length(b)) # generates an empty matrix which will be filled by the "power" values from the simulations
+
+for (k in 1:length(b))
+ {
+  
+  b_b <- b[k]
+  
+   for (j in 1:length(sample_size))
+
+    {
+   
+      s_s = sample_size[j]
+      for (i in 1:N)
+      {
+       ent <- rnorm(s_s, mean=mean(endPoints$ent), sd=2)
+       EQU <- rbinom(s_s, 1, (endPoints$EQU>0)/length(endPoints$EQU))
+       overlap <- rnorm(s_s, mean=mean(endPoints$overlap), sd=2)
+       y_det <- a + b_b*ent + coef(ent_div_lm)[3]*EQU + coef(ent_div_lm)[4]*overlap
+       y_sim <- rnorm(s_s, mean=y_det,sd=2)
+       lm1 <- lm(y_sim ~ ent + EQU + overlap)
+       p[i] <- coef(summary(lm1))[2,4]
+    
+     }
+    
+      power.size[j] <- length(p[p<0.05])/N 
+   }
+   
+    power.b[,k] <- power.size 
+}
+
+```
+
+2.
+Perspective plot:
+```{r perspective_plot_3, echo=FALSE}
+persp(y=b, x=sample_size,z=power.b, col="blue", theta=-80, shade=0.8, ltheta=55, ylab="slope", xlab="Sample Size", lphi=80, ticktype = "detailed")
+```
+
+Contour plot (zoomed in for legiibility):
+```{r contour_plot_3, echo=FALSE}
+# contour plot
+contour(z=power.b, x=sample_size, y=b, col="blue",  ylab="slope", xlab="Sample Size", ylim=c(-.2, .2))
+```
+
+Fancy contour plot:
+```{r fancy_contour_plot_3, echo=FALSE}
+#fancy contour
+filled.contour(z=power.b, x=sample_size, y=b,  ylab="slope", ylim=c(min(b),max(b)), xlim=c(min(sample_size),max(sample_size)), xlab="Sample Size", color = topo.colors)
+```
+
+Scree plot:
+```{r scree_plot_3, echo=FALSE}
+###
+power.b.t  <- t(power.b)
+require(lattice)
+
+lev.pow <- as.factor(b) # from numeric slopes to factor for the legend
+
+
+xyplot(power.b.t[1,] + power.b.t[2,] + power.b.t[3,] + power.b.t[4,] + power.b.t[5,] + power.b.t[6,] 
+       + power.b.t[7,] + power.b.t[8,] + power.b.t[9,] + power.b.t[10,] + power.b.t[11,] + power.b.t[12,] + power.b.t[13,] + power.b.t[14,] + power.b.t[15,] + power.b.t[16,] + power.b.t[17,] + power.b.t[18,] + power.b.t[19,] + power.b.t[20,] + power.b.t[21,] ~ sample_size, type="b", ylab="power", key=simpleKey(levels(lev.pow),space="right", title="slope"))
+```
+
+These results suggest that the magnitude of the effect size would have to be very small in order for me to fail to detect the effect when it was present. For very small effect sizes, increasing sample size would potentially be useful. However, preliminarily, the effect size seems to be large enough that my sample size is adequate to detect it. The standard alpha seems appropriate. If anything my experiment is over-powered and I should use a lower alpha level.
+
+#2.
+A.   
+
+Method | Model used for generating data | Good for p-values? | Good for confidence intervals? |  
+-------|--------------------------------|--------------------|--------------------------------|  
+Monte Carlo under Null | Null | Yes | No |  
+Monte Carlo under Full | Full | Yes | Yes |  
+Permutaion test | Null | Yes | No (requires a lot of assumptions) |  
+Residual non-parametric Bootstrap | Full | Yes | Yes |  
+Pairs non-parametric Bootstrap | Null | Yes | Yes |  
+
+Some methods are only useful for p-values rather than for full confidence intervals because generating confidence intervals requires a greater knowledge of the shape of the full distribution. This can require either more thorough sampling (either in the simulation or in the original dataset), or additional assumptions. Any method that is good for generating confidence intervals is also good for generating p-values, because looking at whether or not a confidence interval overlaps 0 gives you the same information as a p-value.
+
+B.
+
+```{r confidence_intervals}
+ent_div_lm <- lm(ShannonDiversityPhenotype ~ ent+(EQU>0)+overlap, data=endPoints)
+confint(ent_div_lm)
+```
+
+Since this model turns out to be uninteresting (ent is crazily significant), I will also do some tests on the interaction between entropy and overlap in this model:
+
+```{r confidence_intervals_interaction}
+interaction_lm <- lm(endPoints$ShannonDiversityPhenotype ~ endPoints$ent*endPoints$overlap)
+confint(interaction_lm)
+```
+
+C. 
+
+```{r simulations, include=FALSE}
+null_lm <- lm(ShannonDiversityPhenotype ~ (EQU>0)+overlap, data=endPoints) #we want to know if ent matters
+null_interaction <- lm(ShannonDiversityPhenotype ~ ent + overlap, data = endPoints) #remove interaction to see if it matters
+
+SimulationUnderNullModel <- function(model = ent_div_lm, null = null_lm, coef_index=2){
+  #extract design matrix
+	matr <- model.matrix(null)  # here
+	rse = summary(null)$sigma 
+	df=null$df 
+	matr_mod <- model.matrix(model) #here
+	
+	# incorporate uncertainty in RSE
+	rse_sim <- rse*sqrt(df/rchisq(1, df = df)) 
+	# Simulate data (response) conditional on the simulated RSE.
+	y_sim <- rnorm(n = nrow(matr), 
+	    mean = matr%*%coef(null), sd=rse_sim)
+	# 0 + design matrix (since the intercept is already in the design matrix)
+	lm_sim <- lm(y_sim ~ 0 + matr_mod) # fit model with simulated response
+	coef(lm_sim)[coef_index]}
+
+#Testing effect of entropy
+N = 5000 # how many iterations of simulations
+simulated_coefficients <- replicate(N,SimulationUnderNullModel())
+simulated_coefficients <- t(simulated_coefficients)
+
+print(length(simulated_coefficients[simulated_coefficients >= coef(ent_div_lm)[2]])/N)
+
+#Testing effect of overlap*entropy interaction
+N = 5000 # how many iterations of simulations
+simulated_coefficients <- replicate(N,SimulationUnderNullModel(interaction_lm, null_interaction, 4))
+simulated_coefficients <- t(simulated_coefficients)
+
+hist(simulated_coefficients)
+p <- (length(simulated_coefficients[simulated_coefficients <= coef(interaction_lm)[4]])/N)
+
+library(MASS)
+ModelSimParameters <- function(model=ent_div_lm, N=50) {
+  
+  # inputting the estimated coefs from the model in mu
+	# Sigma is the variance covariance matrix for the parameter estimates.
+	# we used estimated var-covar matrix for parameters for sigma
+
+	par_mat <- mvrnorm(n=N, # Number of simulated values
+	    mu=c(coef(model)), # vector of coefs
+	    Sigma=vcov(model))   # matrix of variances and co-variances
+	return(par_mat)}
+
+# We can run all the simulations in one call to mvrnorm (no need to use replicate or a for loop)
+simulated_slope_intercept <- ModelSimParameters(model=ent_div_lm, N=N)
+
+#confidence intervals (simulated and asymptotic)
+apply(simulated_slope_intercept, MARGIN=2, quantile, probs=c(0.025, 0.975))
+
+```
+
+Results:
+N = 50:  
+
+Replicate | p-value | Confidence interval  
+----------|----------|-------------------  
+1 | 0 | 0.2830 - 0.4456  
+2 | 0 | 0.2904 - 0.4735  
+3 | 0 | 0.3054 - 0.4427   
+4 | 0 | 0.3082 - 0.4256  
+5 | 0 | 0.2946 - 0.4630  
+
+The effect was so large that there was no change in p-value from replicate to replication - an effect greater than or equal to the one observed in the data was never produced under the null model. The confidence intervals, however, fluctuate slightly between tests. They never overlap 0, which is consistent with the p-values. These p-values and confidence intervals are kind of like an empirically collected data set answering the questions solved analytically using classical frequentist approaches, in that we are very literally assuming that the null hypothesis is true and asking how frequently we would expect to observe results as extreme as we did in the dataset. The primary difference here is that the extreme tails of the distribution are given less weight in simulation tests. In frequentist tests, we always know that there is a very small possibility of seeing an extreme value. In simulation tests, while the same probability exists for generating such a value, we don't incorporate it into the p-value or confidence interval if we don't see it. Hence, it is possible to get p-values equal to 0 in this framework, despite the fact that there is technically a non-zero probability that it is true.
+
+(The interaction model also yielded p-values = to 0, so it is not included here as it does not give me the opportunity to demonstrate additional analysis)
+
+N = 5000:  
+
+Replicate | p-value | Confidence interval  
+----------|----------|-------------------  
+1 | 0 | 0.2891 - 0.4654  
+2 | 0 | 0.2917 - 0.4694  
+3 | 0 | 0.2884 - 0.4653  
+
+The larger sample size seems to have resulted in confidence interval bounds that are closer to each other beteen times the analysis is run. If the p-values were non-zero, they would likely also be more similar to each other. This makes sense, because the larger sample size means that a more representative sample of potential values that could have been generated is taken each time. If the distributional assumptions were completely correct, this would be exactly the same as having a larger sample size in the real data-set. Since this is unlikely to be the case, the effect will be subtely different, but the concept is the same.
+
+D. 
+```{r permutations, include=FALSE}
+
+permutation.function <- function(){
+  #Shuffle ent because that's the variable that we want to see the effect of
+  ent_lm.resample <- lm(endPoints$ShannonDiversityPhenotype ~ sample(endPoints$ent, length(endPoints$ent), replace=F) + (endPoints$EQU>0) + endPoints$overlap)
+  anova(ent_lm.resample)[1,5] # place all of the fstats inthis vector
+}
+
+vals <- replicate(5000, permutation.function())
+hist(vals, breaks=20, xlab="P-values")
+vals[vals <= anova(ent_div_lm)[1,5]]/length(vals)
+
+#With interaction model
+permutation.function.interaction <- function(){
+  #Shuffle ent because that's the variable that we want to see the effect of
+  ent_lm.resample <- lm(endPoints$ShannonDiversityPhenotype ~ endPoints$ent + endPoints$overlap + sample(endPoints$ent*endPoints$overlap, length(endPoints$ent), replace=F))
+  anova(ent_lm.resample)[3,5] # place all of the fstats inthis vector
+}
+vals <- replicate(5000, permutation.function.interaction())
+hist(vals, breaks=20, xlab="P-values")
+length(vals[vals <= anova(interaction_lm)[3,5]])/length(vals)
+
+```
+
+N = 50:  
+
+Replicate | p-value   
+----------|----------  
+1 | 0   
+2 | 0    
+3 | 0    
+4 | 0  
+5 | 0  
+
+N = 5000:  
+
+Replicate | p-value  
+----------|----------  
+1 | 0   
+2 | 0   
+3 | 0  
+
+(The interaction model also had p-values of 0 for everything so results are not shown)
+
+These results further support the idea that it is highly unlikely that environmental entropy does not have an effect on diversity. So unlikely, in fact, that a more extreme p-value than the one in the actual model was never observed. On the face of it, this seems a bit unlikely, since it's always possible, for instance, that some entropies might be matched with the values that they originally belonged with. However, the p-value of the term in the model is 2.222418e-26, which is incredibly low, and the size of the dataset makes correct re-pairing of values unlikely. The histogram shows that the p-values are roughly uniformly distributed between 0 and 1, with slightly more towards to the left tail. This makes sense, because the randomization is generating models with correlations between entropy and diversity that are randomly distributed across the possible values. These values are being produced under a null model.
+
+E.
+```{r bootstrapping, include=TRUE}
+
+#The boot library doesn't like the fact that the the non-interaction model has a p-value of 0, so here is some code for that
+model <- ent_div_lm
+x <- model.matrix(model)
+# Residual (Fixed) non-parametric Bootstrap
+resid.lm.boot <- function(resids = resid(model), X = x ) {
+  Y <- coef(model)[1] + coef(model)[2:4] * X + sample(resids, length(resids), replace=T) # generating new values for each y[i] (vector Y), by adding the bootstrapped residuals to the fitted model.
+  model.boot <- lm( Y ~ endPoints$ent+(endPoints$EQU>0)+endPoints$overlap) # refit model with new Y values
+  coef(model.boot) # Extract the co-efficients
+}
+vals <- replicate(5000, resid.lm.boot()[2])
+p <- vals[vals >= coef(model)[2]]/5000
+hist(vals, xlab="Coefficient of ent")
+
+#The interaction model is a little less ridiculously significant, so the Boot library can handle it
+library(car)
+
+#Residual bootstrap
+resid_bootstrap <- Boot(interaction_lm, R=5000, method="residual")
+hist(resid_bootstrap)
+confint(resid_bootstrap)
+
+#Pairs bootstrap
+pairs_bootstrap <- Boot(interaction_lm, R=5000, method="case")
+hist(pairs_bootstrap)
+confint(pairs_bootstrap)
+
+```
+
+As expected, these histograms follow a roughly normal distribution. This makes sense, because they are sampling distributions and as such are subject to the central limit theorem.
+
+F. 
+
+Replicate | p-value | Confidence interval  
+----------|----------|-------------------
+Original ent coefficient | NA | 0.28987 - 0.4680
+Monte Carlo 1 | 0 | 0.2891 - 0.4654  
+Monte Carlo 2 | 0 | 0.2917 - 0.4694  
+Monte Carlo 3 | 0 | 0.2884 - 0.4653  
+Permutation 1 | 0 |   
+Permutation 2 | 0 |   
+Permutation 3 | 0 |
+Residual bootstrap | 0 | 0.2901088 - 0.4659092
+Pairs bootstrap | 0 | 0.2942720 - 0.4640141
+
+Thse results are highly similar in that all of the p-values are 0. The confidence intervals are also incrediblely similar. This suggests that the estimates for the coefficient of entropy are accurate. The miniscule differences are likely due to random sampling variation. 
